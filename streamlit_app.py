@@ -90,34 +90,54 @@ def load_pipeline_robust(path):
         return joblib.load(path)
     except Exception as primary_exc:
         # fallback: read bytes and unpickle with custom Unpickler that resolves missing modules to local names
+        # --- DEBUG VERSION: show both exceptions clearly in Streamlit UI and logs ---
         try:
             with open(path, "rb") as f:
                 data = f.read()
             bio = io.BytesIO(data)
             class FallbackUnpickler(pickle.Unpickler):
                 def find_class(self, module, name):
-                    # try normal import first
                     try:
                         return super().find_class(module, name)
                     except Exception:
-                        # if class name exists in this module's globals, return it
                         g = globals()
                         if name in g:
                             return g[name]
-                        # attempt to import the original module if available
                         try:
                             mod = __import__(module, fromlist=[name])
                             return getattr(mod, name)
                         except Exception:
-                            # re-raise original import error for clarity
                             raise
+
             bio.seek(0)
             unp = FallbackUnpickler(bio)
             obj = unp.load()
             return obj
         except Exception as fallback_exc:
-            # raise combined error for debugging
-            raise RuntimeError(f"Failed to load model via joblib ({primary_exc}) and fallback unpickler ({fallback_exc})")
+            # Print full debug info to Streamlit UI and stderr (Cloud logs)
+            import traceback, sys
+            st.error("=== MODEL LOAD DEBUG INFO ===")
+            st.write(f"MODEL_PATH = {path}")
+            st.write("Working directory listing:")
+            try:
+                st.write(os.listdir("."))
+            except Exception:
+                st.write("Could not list directory.")
+            st.write("---- Primary joblib.load() exception (type + message) ----")
+            st.write(type(primary_exc).__name__ + ": " + str(primary_exc))
+            st.text("".join(traceback.format_exception(type(primary_exc), primary_exc, primary_exc.__traceback__)))
+            st.write("---- Fallback unpickler exception (type + message) ----")
+            st.write(type(fallback_exc).__name__ + ": " + str(fallback_exc))
+            st.text("".join(traceback.format_exception(type(fallback_exc), fallback_exc, fallback_exc.__traceback__)))
+            # Also write to stderr so it appears in Cloud logs
+            print("=== MODEL LOAD DEBUG INFO ===", file=sys.stderr)
+            print(f"MODEL_PATH = {path}", file=sys.stderr)
+            traceback.print_exception(type(primary_exc), primary_exc, primary_exc.__traceback__, file=sys.stderr)
+            traceback.print_exception(type(fallback_exc), fallback_exc, fallback_exc.__traceback__, file=sys.stderr)
+            # stop app so you can inspect the messages
+            st.stop()
+            # unreachable, but keep same signature
+            raise RuntimeError("Model load failed (see debug output).")
 
 # ---------------------------
 # Load pipeline (robust)
