@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+streamlit
+scikit-learn
+xgboost
+pandas
+numpy
+optuna
+joblib
+shap
+matplotlib
+seaborn
+pyyaml
+openpyxl
+python-multipart

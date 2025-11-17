@@ -1,0 +1,46 @@
+
+import pandas as pd
+from pathlib import Path
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from src.utils.common import read_params
+import joblib
+
+def get_preprocessor(params, numerical_cols):
+    impute_strategy = params['data_processing']['impute_strategy']
+    numerical_pipeline = Pipeline([
+        ('imputer', SimpleImputer(strategy=impute_strategy)),
+        ('scaler', StandardScaler())
+    ])
+    return ColumnTransformer([('num', numerical_pipeline, numerical_cols)], remainder='passthrough')
+
+def main():
+    CONFIG_PATH = Path("Config/params.yaml")
+    params = read_params(CONFIG_PATH)
+    target_col = params['base']['target_column']
+    raw_data_path = Path(params['data_ingestion']['output_file'])
+    passthrough = params['data_processing']['passthrough_features']
+    pca_var = params['data_processing']['pca_variance_threshold']
+
+    processed_data_path = Path("data/processed/data_processed.pkl")
+    pipeline_path = Path("models/preprocessing_pipeline.joblib")
+
+    data = pd.read_csv(raw_data_path)
+    X = data.drop(columns=[target_col], errors='ignore')
+    y = data[target_col]
+    num_cols = [c for c in X.columns if c not in passthrough]
+    preprocessor = get_preprocessor(params, num_cols)
+    X_trans = preprocessor.fit_transform(X)
+    X_df = pd.DataFrame(X_trans, columns=num_cols)
+    pca = PCA(n_components=pca_var, random_state=params['data_ingestion']['random_state'])
+    pca_df = pd.DataFrame(pca.fit_transform(X_df), columns=[f'PCA_{i+1}' for i in range(pca.n_components_)])
+    final = pd.concat([pca_df, X[passthrough], y], axis=1)
+    final.to_pickle(processed_data_path)
+    joblib.dump(Pipeline([('pre', preprocessor), ('pca', pca)]), pipeline_path)
+    print("Data processed and saved.")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: ultramafic_mlops-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro        # optional: provide model artifacts to API if needed
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: ultramafic_mlops-ui
+    restart: unless-stopped
+    volumes:
+      - ./models:/app/models:ro       # mount model artifacts (read-only)
+      - ./src:/app/src:rw             # mount source so edits are live inside the container
+      - ./data:/app/data:rw           # optional: sample data
+      - ./logs/ui:/app/logs:rw        # optional: persistent logs
+    ports:
+      - "8501:8501"
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Kolkata
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8501/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
