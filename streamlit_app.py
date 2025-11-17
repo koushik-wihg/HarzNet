@@ -72,7 +72,7 @@ class PivotILRTransformer(BaseEstimator, TransformerMixin):
 # ---------------------------
 # Config
 # ---------------------------
-MODEL_PATH = r"D:\Python_Projects\LGBM_Ultramafic\Models_XGB_SMOTE_OUT_Fixed\best_pipeline_XGB_SMOTE_OUT_Fixed.joblib"
+MODEL_PATH = "best_pipeline_XGB_SMOTE_OUT_Fixed.joblib"
 
 # canonical fallback list
 MAJORS = ["SiO2","TiO2","Al2O3","Fe2O3","FeO","MnO","MgO","CaO","Na2O","K2O","P2O5","SO3","LOI"]
