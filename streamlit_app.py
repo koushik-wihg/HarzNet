@@ -21,10 +21,19 @@ with col2:
 if st.button("Predict"):
     st.success("Mock prediction result (replace with real model):  **Harzburgite**")
 
-st.write("Upload XRF/Geochemical CSV for bulk processing:")
+st.write("Upload XRF/Geochemical file for bulk processing:")
 
-uploaded = st.file_uploader("Upload CSV", type=["csv"])
+uploaded = st.file_uploader("Upload CSV or Excel", type=["csv", "xlsx"])
+
 if uploaded:
-    df = pd.read_csv(uploaded)
-    st.dataframe(df.head())
-    st.success("CSV loaded successfully.")
+    try:
+        if uploaded.name.endswith(".csv"):
+            df = pd.read_csv(uploaded)
+        else:
+            df = pd.read_excel(uploaded)
+
+        st.dataframe(df.head())
+        st.success("File loaded successfully.")
+
+    except Exception as e:
+        st.error(f"Error reading file: {e}")
