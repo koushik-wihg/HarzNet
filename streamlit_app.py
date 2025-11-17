@@ -1,8 +1,10 @@
-# streamlit_app.py (final — robust DF-preserving transforms)
+# streamlit_app.py (final — robust DF-preserving transforms + fallback unpickler)
 import numpy as np
 import pandas as pd
 import math
 import io
+import os
+import pickle
 import joblib
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -80,9 +82,47 @@ REE_LIST = ["La","Ce","Pr","Nd","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu
 CANONICAL_ALL = MAJORS + REE_LIST
 
 # ---------------------------
-# Load pipeline
+# Robust loader: try joblib first, then fallback unpickler mapping missing modules to local classes
 # ---------------------------
-best_pipeline = joblib.load(MODEL_PATH)
+def load_pipeline_robust(path):
+    # try normal joblib.load first
+    try:
+        return joblib.load(path)
+    except Exception as primary_exc:
+        # fallback: read bytes and unpickle with custom Unpickler that resolves missing modules to local names
+        try:
+            with open(path, "rb") as f:
+                data = f.read()
+            bio = io.BytesIO(data)
+            class FallbackUnpickler(pickle.Unpickler):
+                def find_class(self, module, name):
+                    # try normal import first
+                    try:
+                        return super().find_class(module, name)
+                    except Exception:
+                        # if class name exists in this module's globals, return it
+                        g = globals()
+                        if name in g:
+                            return g[name]
+                        # attempt to import the original module if available
+                        try:
+                            mod = __import__(module, fromlist=[name])
+                            return getattr(mod, name)
+                        except Exception:
+                            # re-raise original import error for clarity
+                            raise
+            bio.seek(0)
+            unp = FallbackUnpickler(bio)
+            obj = unp.load()
+            return obj
+        except Exception as fallback_exc:
+            # raise combined error for debugging
+            raise RuntimeError(f"Failed to load model via joblib ({primary_exc}) and fallback unpickler ({fallback_exc})")
+
+# ---------------------------
+# Load pipeline (robust)
+# ---------------------------
+best_pipeline = load_pipeline_robust(MODEL_PATH)
 LABEL_MAP_INV = {0: "MOR", 1: "OIB", 2: "SSZ"}
 
 # ---------------------------
@@ -159,7 +199,7 @@ def run_transformer_steps_keep_df(pipeline, X_df):
         # apply transform
         try:
             X_next = step.transform(X_current)
-        except Exception as e:
+        except Exception:
             # sometimes transformers require fit_transform
             X_next = step.fit_transform(X_current)
         # if numpy, try to recover column names
